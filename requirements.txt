@@ -1,0 +1,15 @@
+fastapi==0.63.0
+pymongo==4.1.1
+uvicorn==0.13.3
+dnspython==2.3.0
+PyJWT==2.6.0
+passlib==1.7.1
+incidentsBugDSI==0.4 # Developed by Daniela Torres from DSI. <3
+slowapi==0.1.8
+pytz==2022.2.1
+requests==2.31.0
+
+# For wallets
+ecdsa==0.18.0
+pysha3==1.0.2
+bip39==0.0.2
