@@ -21,7 +21,6 @@ class BlockWithAdditionalData(Block):
     """
     timestamp: Optional[int] = int(datetime.now(pytz.timezone('America/Bogota')).timestamp())
     hash: Optional[str] = None
-    nonce: Optional[int] = 0
 
     def compute_hash(block) -> str:
         """

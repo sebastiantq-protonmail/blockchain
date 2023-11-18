@@ -1,8 +1,12 @@
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+
+# Methods imports
+from app.api.methods.miner import mine_block
 
 # Routes and config modules import
 from app.api.config.env import API_NAME, PRODUCTION_SERVER_URL, DEVELOPMENT_SERVER_URL
@@ -10,9 +14,10 @@ from app.api.config.limiter import limiter
 from app.api.routes.transactions import router as transactions
 from app.api.routes.blocks import router as blocks
 from app.api.routes.chain import router as chain
-from app.api.routes.miner import router as miner
+#from app.api.routes.miner import router as miner # Deprecated, PoS is executed automatically
 from app.api.routes.nodes import router as nodes
 from app.api.routes.wallets import router as wallets
+from app.api.routes.stakes import router as stakes
 
 from fastapi.openapi.utils import get_openapi
 
@@ -77,6 +82,8 @@ app.add_middleware(
 @app.on_event('startup')
 async def on_startup():
     # Actions to be executed when the API starts.
+    # Start mining
+    app.state.mining_task = asyncio.create_task(mine_block())
     print('API started')
 
 @app.on_event('shutdown')
@@ -88,6 +95,7 @@ async def on_shutdown():
 app.include_router(chain, prefix=f'/api/v1/{API_NAME}')
 app.include_router(transactions, prefix=f'/api/v1/{API_NAME}')
 app.include_router(blocks, prefix=f'/api/v1/{API_NAME}')
-app.include_router(miner, prefix=f'/api/v1/{API_NAME}')
+#app.include_router(miner, prefix=f'/api/v1/{API_NAME}')
 app.include_router(nodes, prefix=f'/api/v1/{API_NAME}')
 app.include_router(wallets, prefix=f'/api/v1/{API_NAME}')
+app.include_router(stakes, prefix=f'/api/v1/{API_NAME}')

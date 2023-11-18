@@ -1,3 +1,4 @@
+import uuid
 from fastapi import APIRouter, HTTPException, Request, Depends, status
 from slowapi.errors import RateLimitExceeded
 from bson import ObjectId
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
                 429: {"model": ResponseError, "description": "Too many requests."}
             })
 @limiter.limit("500/minute")
-def add_new_transaction(transaction: Transaction, request: Request):
+async def add_new_transaction(transaction: Transaction, request: Request):
     """Add a new transaction to the blockchain.
     
     Args:
@@ -53,17 +54,20 @@ def add_new_transaction(transaction: Transaction, request: Request):
         logger.info("Adding a new transaction.")
         logger.debug(f"Transaction data: {transaction.dict()}") # Using debug level for transaction details
         
+        transaction.uuid = str(uuid.uuid4())
+
         # Verify the transaction data (signature, ...)
         logger.info("Verifying the transaction.")
         if not blockchain.is_valid_transaction(transaction):
+            logger.info("Invalid transaction.")
             raise HTTPException(status_code=400, detail="Invalid transaction.")
-
+        
         transaction_with_additional_data = blockchain.add_new_unconfirmed_transaction(transaction)
         logger.info("Transaction successfully added.")
 
         # Propagate the transaction to other nodes
         logger.info("Propagating the transaction to other nodes.")
-        blockchain.announce_new_transaction(transaction_with_additional_data)
+        await blockchain.announce_new_transaction(transaction_with_additional_data)
         logger.info("Transaction successfully propagated.")
 
         return blockchain.get_unconfirmed_transactions()
@@ -75,7 +79,7 @@ def add_new_transaction(transaction: Transaction, request: Request):
     except Exception as e:
         handle_error(e, logger)
 
-@router.post('/transaction/node', 
+@router.post('/transaction/node/', 
             response_model=list[TransactionWithAdditionalData], 
             status_code=status.HTTP_201_CREATED, 
             tags=["TRANSACTIONS"],
@@ -85,7 +89,7 @@ def add_new_transaction(transaction: Transaction, request: Request):
                 429: {"model": ResponseError, "description": "Too many requests."}
             })
 @limiter.limit("500/minute")
-def receive_transaction(transaction: TransactionWithAdditionalData, request: Request):
+async def receive_transaction(transaction: TransactionWithAdditionalData, request: Request):
     """Add a new transaction to the blockchain from other node.
     
     Args:
@@ -97,7 +101,7 @@ def receive_transaction(transaction: TransactionWithAdditionalData, request: Req
     try:
         logger.info("Adding a new transaction.")
         logger.debug(f"Transaction data: {transaction.dict()}") # Using debug level for transaction details
-        
+        print(transaction.dict())
         # Verify the transaction data (signature, ...)
         logger.info("Verifying the transaction.")
         if not blockchain.is_valid_transaction(transaction):
@@ -108,7 +112,7 @@ def receive_transaction(transaction: TransactionWithAdditionalData, request: Req
 
             # Propagate the transaction to other nodes
             logger.info("Propagating the transaction to other nodes.")
-            blockchain.announce_new_transaction(transaction)
+            await blockchain.announce_new_transaction(transaction)
             logger.info("Transaction successfully propagated.")
         else:
             logger.info("Transaction already exists.")

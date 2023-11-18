@@ -8,6 +8,7 @@ incidentsBugDSI==0.4 # Developed by Daniela Torres from DSI. <3
 slowapi==0.1.8
 pytz==2022.2.1
 requests==2.31.0
+httpx==0.25.1
 
 # For wallets
 ecdsa==0.18.0

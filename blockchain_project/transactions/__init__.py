@@ -1,1 +1,2 @@
-from .classes import TransactionType, Transaction, TransactionWithAdditionalData
+from .classes import TransactionType, Transaction, TransactionWithAdditionalData, \
+                     StakeTransaction

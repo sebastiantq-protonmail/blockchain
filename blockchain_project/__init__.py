@@ -1,4 +1,7 @@
-from .transactions import TransactionType, Transaction, TransactionWithAdditionalData
+from .stake import Stake
+
+from .transactions import TransactionType, Transaction, TransactionWithAdditionalData, \
+                          StakeTransaction
 from .blocks import Block, BlockWithAdditionalData
 from .blockchain import Blockchain
 

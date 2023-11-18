@@ -16,6 +16,8 @@ class TransactionType(int, Enum):
     The TransactionType class is an enumeration that contains the types of transactions.
     """
     COIN_TRANSFER = 0
+    STAKE_DEPOSIT = 1
+    STAKE_WITHDRAW = 2
 
 class CoinTransferTransaction(BaseModel):
     """
@@ -25,8 +27,13 @@ class CoinTransferTransaction(BaseModel):
     receiver: str
     amount: float
 
+class StakeTransaction(BaseModel):
+    sender: str
+    node_url: str # Backed up node for the stake
+    amount: float
+
 # Centralized transaction content
-PossibleContents = Union[CoinTransferTransaction, None]
+PossibleContents = Union[CoinTransferTransaction, StakeTransaction]
 
 class Transaction(BaseModel):
     """
@@ -44,6 +51,10 @@ class Transaction(BaseModel):
                 if isinstance(v, CoinTransferTransaction):
                     return v
                 return CoinTransferTransaction(**v)
+            elif values['type'] in [TransactionType.STAKE_DEPOSIT, TransactionType.STAKE_WITHDRAW]:
+                if isinstance(v, StakeTransaction):
+                    return v
+                return StakeTransaction(**v)
             # Add new transaction types here
         raise ValueError("Invalid content for transaction type")
 
