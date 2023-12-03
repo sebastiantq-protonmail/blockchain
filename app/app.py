@@ -11,6 +11,9 @@ from app.api.methods.miner import mine_block
 # Routes and config modules import
 from app.api.config.env import API_NAME, PRODUCTION_SERVER_URL, DEVELOPMENT_SERVER_URL
 from app.api.config.limiter import limiter
+from app.api.config.blockchain import get_blockchain
+
+from app.api.routes.blockchain import router as blockchain_router
 from app.api.routes.transactions import router as transactions
 from app.api.routes.blocks import router as blocks
 from app.api.routes.chain import router as chain
@@ -18,6 +21,8 @@ from app.api.routes.chain import router as chain
 from app.api.routes.nodes import router as nodes
 from app.api.routes.wallets import router as wallets
 from app.api.routes.stakes import router as stakes
+
+from blockchain_project.blockchain import Blockchain
 
 from fastapi.openapi.utils import get_openapi
 
@@ -81,7 +86,10 @@ app.add_middleware(
 
 @app.on_event('startup')
 async def on_startup():
+    blockchain = get_blockchain()
     # Actions to be executed when the API starts.
+    blockchain.load_from_file()
+
     # Start mining
     app.state.mining_task = asyncio.create_task(mine_block())
     print('API started')
@@ -92,6 +100,7 @@ async def on_shutdown():
     print('API shut down')
 
 # Include the routes
+app.include_router(blockchain_router, prefix=f'/api/v1/{API_NAME}')
 app.include_router(chain, prefix=f'/api/v1/{API_NAME}')
 app.include_router(transactions, prefix=f'/api/v1/{API_NAME}')
 app.include_router(blocks, prefix=f'/api/v1/{API_NAME}')

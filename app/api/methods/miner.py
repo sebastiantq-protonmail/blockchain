@@ -3,7 +3,7 @@ import logging
 from app.api.config.env import API_NAME
 
 # Blockchain project import
-from app.api.config.blockchain import blockchain
+from app.api.config.blockchain import get_blockchain
 
 # Log file name
 log_filename = f"api_{API_NAME}.log"
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 async def mine_block(initial_delay: float = 33):
     try:
+        blockchain = get_blockchain()
         print("Sleeping for {} seconds...".format(initial_delay))
         await asyncio.sleep(initial_delay)
 
@@ -38,6 +39,9 @@ async def mine_block(initial_delay: float = 33):
                 logger.info("Block #{} is mined.".format(result))
             else:
                 logger.info("No transactions to mine.")
+
+            # Save the blockchain
+            blockchain.save_chain()
 
             await asyncio.sleep(33)
     except asyncio.CancelledError:

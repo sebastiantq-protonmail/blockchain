@@ -5,14 +5,14 @@ from hashlib import sha256
 from typing import Optional
 from pydantic import BaseModel
 
-from blockchain_project import Transaction
+from blockchain_project import TransactionWithAdditionalData
 
 class Block(BaseModel):
     """
     The Block class is a block that contains a list of transactions in the blockchain being developed.
     """
     index: int
-    transactions: list[Transaction]
+    transactions: list[TransactionWithAdditionalData]
     previous_hash: str
     
 class BlockWithAdditionalData(Block):

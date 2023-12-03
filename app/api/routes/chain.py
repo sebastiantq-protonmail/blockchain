@@ -14,7 +14,7 @@ from app.api.models.models import ResponseError
 from app.api.methods.methods import handle_error
 
 # Blockchain project import
-from app.api.config.blockchain import blockchain
+from app.api.config.blockchain import get_blockchain
 
 from blockchain_project.blocks import Block, BlockWithAdditionalData
 from blockchain_project.transactions import Transaction, TransactionWithAdditionalData
@@ -48,6 +48,7 @@ def get_chain(request: Request):
     - dict: A dictionary containing the length of the chain and the chain itself.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Fetching the blockchain data.")
         return blockchain.get_chain()
     except RateLimitExceeded:
@@ -74,6 +75,7 @@ def get_unconfirmed_transactions(request: Request):
     - dict: A dictionary containing the length of the unconfirmed transactions and the list itself.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Fetching the unconfirmed transactions data.")
         return blockchain.get_unconfirmed_transactions()
     except RateLimitExceeded:

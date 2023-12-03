@@ -10,8 +10,14 @@ from typing import Tuple, Union
 CONFIG_FILE = "wallet_config.json"
 
 class TransactionType(int, Enum):
+    """
+    The TransactionType class is an enumeration that contains the types of transactions.
+    """
     COIN_TRANSFER = 0
     STAKE_DEPOSIT = 1
+    STAKE_WITHDRAW = 2
+    SMART_CONTRACT_DEPLOY = 3
+    SMART_CONTRACT_EXECUTION = 4
 
 def load_or_create_config() -> dict:
     if os.path.exists(CONFIG_FILE):
@@ -32,7 +38,7 @@ def create_wallet(node_url: str) -> Tuple[str, str]:
         raise Exception("Failed to create wallet")
 
 def sign_content(content: dict, private_key_str: str) -> str:
-    content_json = json.dumps(content, separators=(',', ':'))
+    content_json = json.dumps(dict(content), separators=(',', ':'))
     sk = ecdsa.SigningKey.from_string(binascii.unhexlify(private_key_str), curve=ecdsa.SECP256k1)
     signature = sk.sign(content_json.encode())
     return binascii.hexlify(signature).decode('utf-8')
@@ -49,7 +55,11 @@ def menu():
         print("3. Send Test Transaction")
         print("4. Stake Operation")
         print("5. Stake Test Operation")
-        print("6. Exit")
+        print("6. Deploy Smart Contract")
+        print("7. Deploy Test Smart Contract")
+        print("8. Call Smart Contract")
+        print("9. Call Test Smart Contract")
+        print("10. Exit")
         choice = input("Enter your choice: ")
 
         if choice == '1':
@@ -63,6 +73,14 @@ def menu():
         elif choice == '5':
             stake_test_operation(config)
         elif choice == '6':
+            deploy_smart_contract(config)
+        elif choice == '7':
+            deploy_test_smart_contract(config)
+        elif choice == '8':
+            call_smart_contract(config)
+        elif choice == '9':
+            call_test_smart_contract(config)
+        elif choice == '10':
             break
         else:
             print("Invalid choice. Please try again.")
@@ -73,6 +91,7 @@ def set_configuration(config: dict):
     config["private_key"] = input("Enter your private key: ")
     save_config(config)
 
+# Transaction operations
 def send_manual_transaction(config: dict):
     receiver = input("Enter receiver address: ")
     amount = float(input("Enter amount to transfer: "))
@@ -83,6 +102,7 @@ def send_test_transaction(config: dict):
     amount = random.uniform(1, 1000)
     create_and_send_transaction(config, receiver, amount, TransactionType.COIN_TRANSFER)
 
+# Stake operations
 def stake_operation(config: dict):
     node_url = input("Enter node URL: ")
     amount = float(input("Enter amount to stake: "))
@@ -92,19 +112,67 @@ def stake_test_operation(config: dict):
     amount = random.uniform(1, 1000)
     create_and_send_transaction(config, config["node_url"], amount, TransactionType.STAKE_DEPOSIT)
 
-def create_and_send_transaction(config: dict, receiver: str, amount: float, transaction_type: TransactionType):
+# Smart contract operations
+def deploy_smart_contract(config: dict):
+    # Read the smart contract code from a file
+    smart_contract_file = input("Enter the smart contract file: ")
+    with open(smart_contract_file, "r") as file:
+        contract_code = file.read()
+    
+    create_and_send_transaction(config, config["node_url"], contract_code, TransactionType.SMART_CONTRACT_DEPLOY)
+
+def deploy_test_smart_contract(config: dict):
+    contract_code = """
+def increment():
+    if "counter" not in state:
+        state["counter"] = 0
+    state["counter"] += 1
+    return state["counter"]
+
+def decrement():
+    if "counter" not in state:
+        state["counter"] = 0
+    state["counter"] -= 1
+    return state["counter"]
+"""
+
+    create_and_send_transaction(config, config["node_url"], contract_code, TransactionType.SMART_CONTRACT_DEPLOY)
+
+def call_smart_contract(config: dict):
+    contract_address = input("Enter contract address: ")
+    function_signature = input("Enter function signature: ")
+    create_and_send_transaction(config, contract_address, function_signature, TransactionType.SMART_CONTRACT_EXECUTION)
+
+def call_test_smart_contract(config: dict):
+    contract_address = "c5b1e9a9c7b6d5d5a9d0d9c9e8b9a9c7b6d5d5a9d0d9c9e8b9a9c7b6d5d5a9d0"
+    function_signature = "increment"
+    create_and_send_transaction(config, contract_address, function_signature, TransactionType.SMART_CONTRACT_EXECUTION)
+
+def create_and_send_transaction(config: dict, receiver: str, payload, transaction_type: TransactionType):
     content = {
         "sender": config["public_key"],
         "receiver": receiver,
-        "amount": amount
+        "amount": payload
     } if transaction_type == TransactionType.COIN_TRANSFER else {
         "sender": config["public_key"],
         "node_url": receiver,  # In stake transactions, 'receiver' is the node_url
-        "amount": amount
-    }
+        "amount": payload
+    } if transaction_type == TransactionType.STAKE_DEPOSIT else {
+        "sender": config["public_key"],
+        "node_url": receiver,  # In stake transactions, 'receiver' is the node_url
+        "amount": payload
+    } if transaction_type == TransactionType.STAKE_WITHDRAW else {
+        "sender": config["public_key"],
+        "contract_code": payload  # In smart contract transactions, 'payload' is the contract code
+    } if transaction_type == TransactionType.SMART_CONTRACT_DEPLOY else {
+        "sender": config["public_key"],
+        "contract_address": receiver,  # In smart contract transactions, 'receiver' is the contract address
+        "function_signature": payload,
+        "args": [],
+        "kwargs": {}
+    } if transaction_type == TransactionType.SMART_CONTRACT_EXECUTION else None
 
     signature = sign_content(content, config["private_key"])
-
     transaction = {
         "type": transaction_type,
         "content": content,
@@ -117,3 +185,5 @@ def create_and_send_transaction(config: dict, receiver: str, amount: float, tran
 
 if __name__ == "__main__":
     menu()
+
+# TODO: Add a function to get the nonce of a wallet

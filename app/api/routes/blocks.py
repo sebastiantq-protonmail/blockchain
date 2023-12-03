@@ -14,7 +14,7 @@ from app.api.models.models import ResponseError
 from app.api.methods.methods import handle_error
 
 # Blockchain project import
-from app.api.config.blockchain import blockchain
+from app.api.config.blockchain import get_blockchain
 
 from blockchain_project.blocks import Block, BlockWithAdditionalData
 
@@ -52,6 +52,7 @@ def add_new_block(block: BlockWithAdditionalData, request: Request):
     - BlockWithAdditionalData: The block added to the blockchain.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Adding new block...")
         if not blockchain.add_block(block, block.hash):
             raise HTTPException(status_code=400, detail="The block was discarded by the node.")

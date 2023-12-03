@@ -10,27 +10,40 @@ from pydantic import BaseModel, validator
 
 from blockchain_project import Block, BlockWithAdditionalData, \
                                TransactionType, Transaction, TransactionWithAdditionalData, \
-                               Stake, StakeTransaction
+                               Stake, StakeTransaction, VM
 
 class Blockchain(BaseModel):
     """
     A class representing the blockchain itself.
     """
+    # Node data
     node_id: str = str(uuid.uuid4())
-    difficulty: int = 2
+    #difficulty: int = 2 # Deprecated by the PoS
     peers: dict[str, str] = {}
-    unconfirmed_transactions: list[TransactionWithAdditionalData] = []
+
+    # PoS data
+    last_mining_time = datetime.now()
+
+    # Cryptocurrency support
     unconfirmed_balances: dict[str, float] = {}
-    balances: dict[str, float] = {
+    balances: dict[str, float] = { # TODO: Add nonce to the users (before called "balances")
         "eea28673cdf0a5d5bb429aac8be6ff29520d436cd402af205776ae3bbf428d9055ede3bf09b6c802c99c40e444a0a5e84afcf32b9ed648d008e08d09334fbb6e": 3000000.0, # Treasury address
         "357c6f13b5cf0eb3647dbaaed897eeec448a913fa48575a275af91122d0eb33a79dde99ee98fd6806f5de6ff27deb375e7db1fe1d8ef3c0f3abff8cd667f9a07": 0.0, # Burn address
     }
+
+    # Stake support
     stakes: dict[str, Stake] = {
         "eea28673cdf0a5d5bb429aac8be6ff29520d436cd402af205776ae3bbf428d9055ede3bf09b6c802c99c40e444a0a5e84afcf32b9ed648d008e08d09334fbb6e": Stake(node_url="localhost:8000", amount=2000000.0), # Treasury address
+        "357c6f13b5cf0eb3647dbaaed897eeec448a913fa48575a275af91122d0eb33a79dde99ee98fd6806f5de6ff27deb375e7db1fe1d8ef3c0f3abff8cd667f9a07": Stake(node_url="localhost:8001", amount=5000000.0),
     }
+
+    # Smart contract support
+    virtual_machine = VM()
+
+    # Blockchain data
+    unconfirmed_transactions: list[TransactionWithAdditionalData] = []
     chain: list[BlockWithAdditionalData] = []
     chain_file_name: str = None
-    last_mining_time = datetime.now()
 
     @validator('chain', pre=True, always=True)
     def create_genesis(cls, chain):
@@ -50,12 +63,19 @@ class Blockchain(BaseModel):
         A method to load the blockchain's chain from a file.
         """
         if self.chain_file_name is not None:
-            # First, we need to check if the file exists
-            if os.path.exists(self.chain_file_name):
-                with open(self.chain_file_name, 'r') as chain_file:
-                    raw_data = chain_file.read()
-                    if raw_data and len(raw_data) != 0:
-                        self.set_chain(json.loads(raw_data))
+            try:
+                # First, we need to check if the file exists
+                if os.path.exists(self.chain_file_name):
+                    with open(self.chain_file_name, 'r') as chain_file:
+                        raw_data = chain_file.read()
+                        if raw_data and len(raw_data) != 0:
+                            # Reconstruct the node data from the blockchain data
+                            chain_data = json.loads(raw_data)
+                            self.create_chain_from_dump(chain_data)
+
+                print(f"Blockchain loaded from {self.chain_file_name}")
+            except Exception as e:
+                print(f"Error occurred loading the blockchain: {e}")
 
     @property
     def last_block(self) -> BlockWithAdditionalData:
@@ -106,7 +126,7 @@ class Blockchain(BaseModel):
         """
         A method to display the blockchain.
         """
-        return [dict(block) for block in self.chain]
+        return [block.dict() for block in self.chain]
     
     def get_stakes(self) -> dict[str, Stake]:
         """
@@ -154,14 +174,10 @@ class Blockchain(BaseModel):
 
         async with httpx.AsyncClient() as client:
             for node_url, node_id in self.peers.items():
-                print(f"Checking chain of {node_url}")
-                
                 response = await client.get(f'http://{node_url}/api/v1/blockchain/stakes/')
                 stake = self.calculate_total_stake(response.json())
-                    
-                print(f"Stake: {stake}")
 
-                if stake >= current_max_stake:
+                if stake > current_max_stake:
                     node_chain = await client.get(f'http://{node_url}/api/v1/blockchain/chain/')
                     longest_chain = node_chain.json()
                     current_max_stake = stake
@@ -178,7 +194,7 @@ class Blockchain(BaseModel):
         """
         self.peers[node_address] = node_id
 
-    def create_chain_from_dump(self, chain_dump) -> None:
+    def create_chain_from_dump(self, chain_dump: list) -> None:
         """
         A method to add the chain from a dump and validate it.
         """
@@ -186,6 +202,7 @@ class Blockchain(BaseModel):
             block = BlockWithAdditionalData(**block_data)
 
             if index == 0:
+                self.chain = []
                 self.chain.append(block)
             else:
                 added = self.add_block(block, block.hash)
@@ -209,9 +226,11 @@ class Blockchain(BaseModel):
         previous_hash = dict(self.last_block)['hash']
         
         if previous_hash != block.previous_hash:
+            print("Previous hash is not equal")
             return False
         
         if not self.is_valid_proof(block, proof):
+            print("Proof is not valid")
             return False
         
         mined_transactions_uuids = set()
@@ -222,10 +241,12 @@ class Blockchain(BaseModel):
 
             # Verify the transaction data (signature, ...)
             if not self.is_valid_transaction(transaction):
+                print("Transaction is not valid")
                 return False
         
         # Process the transactions
         if not self.process_transactions(block.transactions):
+            print("Error processing transactions")
             return False
 
         # Update the unconfirmed transactions
@@ -303,29 +324,41 @@ class Blockchain(BaseModel):
         This method serves as an interface to add the pending transactions to the blockchain 
         by adding them to the block and figuring out Proof Of Work.
         """
-        if not self.unconfirmed_transactions: # No transactions to mine
-            return False
-        
-        validator = self.select_validator()
-        if validator is None: # No validators available
-            return None
+        try:
+            if not self.unconfirmed_transactions: # No transactions to mine
+                return False
+            
+            validator = self.select_validator()
+            if validator is None: # No validators available
+                print("No validators available")
+                return None
 
-        validator_node_url = self.stakes.get(validator).node_url
-        print(f"Selected validator: {validator_node_url}")
-        if self.peers.get(validator_node_url) == self.node_id: # The selected validator is the current node
-            last_block = self.last_block
-            new_block = Block(index=last_block.index + 1,
-                              transactions=self.unconfirmed_transactions,
-                              previous_hash=last_block.hash)
-            new_block_with_additional_data = BlockWithAdditionalData(**new_block.dict())
-            proof = new_block_with_additional_data.compute_hash()
-            self.add_block(new_block_with_additional_data, proof)
-            self.unconfirmed_transactions = []
-            self.update_last_mining_time()
-            return new_block_with_additional_data.index
-        
-        # If the selected validator is not the current node
-        return None
+            validator_node_url = self.stakes.get(validator).node_url
+            print(f"Selected validator: {validator_node_url}")
+
+            if self.peers.get(validator_node_url) == self.node_id: # The selected validator is the current node
+                last_block = self.last_block
+                
+                new_block = Block(index=last_block.index + 1,
+                                transactions=self.unconfirmed_transactions,
+                                previous_hash=last_block.hash)
+                
+                new_block_with_additional_data = BlockWithAdditionalData(**new_block.dict())
+                
+                proof = new_block_with_additional_data.compute_hash()
+                
+                self.add_block(new_block_with_additional_data, proof)
+                
+                self.unconfirmed_transactions = []
+                self.update_last_mining_time()
+                
+                return new_block_with_additional_data.index
+            
+            # If the selected validator is not the current node
+            return None
+        except Exception as e:
+            print(f"Error occurred mining the blockchain: {e}")
+            return False
     
     def update_last_mining_time(self) -> None:
         """
@@ -345,9 +378,17 @@ class Blockchain(BaseModel):
         A method to save the blockchain's chain to a file.
         """
         if self.chain_file_name is not None:
-            with open(self.chain_file_name, 'w') as chain_file:
-                chain_file.write(self.get_chain())
+            try:
+                # Get the chain as a JSON string
+                chain = self.get_chain()
+                
+                # Convert the chain to a JSON string
+                chain_json = json.dumps(chain, indent=4)  # Esto hace que el JSON sea más legible
 
+                with open(self.chain_file_name, 'w') as chain_file:
+                    chain_file.write(chain_json)
+            except Exception as e:
+                print(f"Error occurred saving the blockchain: {e}")
     # Wallet methods
     def add_new_wallet(self, public_key: str) -> bool:
         """
@@ -426,7 +467,17 @@ class Blockchain(BaseModel):
             if sender_balance + sender_stake < transaction.content.amount:
                 return False  # No hay suficiente balance teniendo en cuenta el stake
         elif transaction.type == TransactionType.STAKE_WITHDRAW:
-            return
+            # Verify the signature of the transaction
+            if not transaction.verify_signature(transaction.content, transaction.signature, transaction.content.sender):
+                return False 
+        elif transaction.type == TransactionType.SMART_CONTRACT_DEPLOY:
+            # Verify the signature of the transaction
+            if not transaction.verify_signature(transaction.content, transaction.signature, transaction.content.sender):
+                return False 
+        elif transaction.type == TransactionType.SMART_CONTRACT_EXECUTION:
+            # Verify the signature of the transaction
+            if not transaction.verify_signature(transaction.content, transaction.signature, transaction.content.sender):
+                return False 
         #else:
             # Add new transaction types here
         
@@ -448,20 +499,34 @@ class Blockchain(BaseModel):
         Process a list of transactions.
         """
         for transaction in transactions:
+            print(f"Processing transaction {transaction.hash}...")
             if transaction.type == TransactionType.COIN_TRANSFER:
                 self.update_balance(transaction.content.sender, -transaction.content.amount)
 
                 # Remove the unconfirmed balance of the sender
-                self.unconfirmed_balances[transaction.content.sender] -= transaction.content.amount
+                if transaction.content.sender in self.unconfirmed_balances:
+                    self.unconfirmed_balances[transaction.content.sender] -= transaction.content.amount
 
                 self.update_balance(transaction.content.receiver, transaction.content.amount)
             elif transaction.type == TransactionType.STAKE_DEPOSIT:
                 if not self.add_stake(transaction.content):
                     return False
                 
-                self.unconfirmed_balances[transaction.content.sender] -= transaction.content.amount
+                if transaction.content.sender in self.unconfirmed_balances:
+                    self.unconfirmed_balances[transaction.content.sender] -= transaction.content.amount
             elif transaction.type == TransactionType.STAKE_WITHDRAW:
                 return self.withdraw_stake(transaction.content)
+            elif transaction.type == TransactionType.SMART_CONTRACT_DEPLOY:
+                # Deploy the smart contract
+                print("Deploying smart contract...")
+                self.virtual_machine.deploy_contract(transaction.content.contract_code)
+                print("Smart contract deployed.")
+            elif transaction.type == TransactionType.SMART_CONTRACT_EXECUTION:
+                # Execute the smart contract
+                self.virtual_machine.execute_contract(transaction.content.contract_address,
+                                                      transaction.content.function_signature,
+                                                      *transaction.content.args,
+                                                      **transaction.content.kwargs)
             # else:
                 # Add new transaction types here
 
@@ -535,7 +600,7 @@ class Blockchain(BaseModel):
         """
         Calculate the total staked.
         """
-        return sum(Stake(**dict(stake)).amount for stake in stakes.values())
+        return sum(Stake(**dict(stake)).amount for stake in stakes.values()) 
     
     def distribute_rewards(self, validator_public_key: str) -> None:
         """
@@ -549,7 +614,7 @@ class Blockchain(BaseModel):
 
         for public_key, stake in self.stakes.items():
             if stake.node_url == validator_public_key:
-                reward = (stake.amount / total_stake) * self.REWARD_AMOUNT
+                reward = (stake.amount / total_stake) * REWARD_AMOUNT
                 self.balances[public_key] = self.balances.get(public_key, 0) + reward
 
     def penalize_validator(self, validator_public_key: str) -> None:
@@ -559,4 +624,4 @@ class Blockchain(BaseModel):
         PENALTY_AMOUNT = 5  # Puedes ajustar este valor
 
         current_balance = self.balances.get(validator_public_key, 0)
-        self.balances[validator_public_key] = max(0, current_balance - self.PENALTY_AMOUNT)
+        self.balances[validator_public_key] = max(0, current_balance - PENALTY_AMOUNT)

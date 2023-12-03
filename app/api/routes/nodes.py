@@ -18,7 +18,7 @@ from app.api.methods.methods import handle_error
 from app.api.methods.miner import mine_block
 
 # Blockchain project import
-from app.api.config.blockchain import blockchain
+from app.api.config.blockchain import get_blockchain, reset_blockchain
 
 from blockchain_project.blockchain import Blockchain
 
@@ -57,6 +57,7 @@ def register_new_peers(node_address: str, node_id: str, request: Request):
     - Blockchain: The blockchain data.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Registering a new peer node.")
 
         if not node_address:
@@ -96,6 +97,7 @@ def register_peers(peers: dict[str, str], request: Request):
     - dict[str, str]: The peers registered.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Registering node peers.")
 
         blockchain.set_peers(peers)
@@ -128,6 +130,7 @@ def get_time_to_next_mining(request: Request):
     - str: The time to next mining.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Returning the last mined date.")
         return blockchain.time_to_next_mining()
     except RateLimitExceeded:
@@ -159,6 +162,11 @@ async def connect_to_new_node(node_address: str, request: Request):
     - Blockchain: The blockchain data.
     """
     try:
+        # Create the blockchain from scratch
+        reset_blockchain()
+
+        blockchain = get_blockchain()
+        
         logger.info("Connecting to a new peer node.")
 
         if not node_address:
@@ -176,15 +184,13 @@ async def connect_to_new_node(node_address: str, request: Request):
         # Update the blockchain and the peers.
         if response.status_code == 200:
             chain_dump = response.json()['chain']
-            
+
             if blockchain.create_chain_from_dump(chain_dump):
-                blockchain.set_difficulty(response.json()['difficulty'])
                 blockchain.set_peers(response.json()['peers'])
                 blockchain.set_unconfirmed_transactions(response.json()['unconfirmed_transactions'])
-                blockchain.set_chain(response.json()['chain'])
             else:
                 raise HTTPException(status_code=400, detail="Invalid data")
-            
+
             # Register the new peer node
             blockchain.register_new_peer(node_address, response.json()['node_id'])
         
@@ -203,7 +209,7 @@ async def connect_to_new_node(node_address: str, request: Request):
             if response.status_code != 200:
                 logger.error("Failed to get the next mining time from the new peer node.")
                 raise HTTPException(status_code=500, detail="Connection to peer node failed")
-            
+
             # Cancel the current mining task and create a new one with the new mining time
             app = request.app
             if app.state.mining_task and not app.state.mining_task.done():

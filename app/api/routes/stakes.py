@@ -14,7 +14,7 @@ from app.api.models.models import ResponseError
 from app.api.methods.methods import handle_error
 
 # Blockchain project import
-from app.api.config.blockchain import blockchain
+from app.api.config.blockchain import get_blockchain
 
 from blockchain_project import Stake
 
@@ -47,6 +47,7 @@ def get_stakes(request: Request):
     - dict: A dictionary containing the stakes of the blockchain.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Fetching the blockchain stakes.")
         return blockchain.get_stakes()
     except RateLimitExceeded:

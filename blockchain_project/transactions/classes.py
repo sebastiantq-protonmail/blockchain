@@ -18,6 +18,8 @@ class TransactionType(int, Enum):
     COIN_TRANSFER = 0
     STAKE_DEPOSIT = 1
     STAKE_WITHDRAW = 2
+    SMART_CONTRACT_DEPLOY = 3
+    SMART_CONTRACT_EXECUTION = 4
 
 class CoinTransferTransaction(BaseModel):
     """
@@ -32,8 +34,22 @@ class StakeTransaction(BaseModel):
     node_url: str # Backed up node for the stake
     amount: float
 
+class SmartContractDeploymentTransaction(BaseModel):
+    sender: str
+    contract_code: str
+
+class SmartContractTransaction(BaseModel):
+    sender: str
+    contract_address: str
+    function_signature: str
+    args: Optional[list] = []
+    kwargs: Optional[dict] = {}
+
 # Centralized transaction content
-PossibleContents = Union[CoinTransferTransaction, StakeTransaction]
+PossibleContents = Union[CoinTransferTransaction,
+                         StakeTransaction,
+                         SmartContractDeploymentTransaction,
+                         SmartContractTransaction]
 
 class Transaction(BaseModel):
     """
@@ -55,6 +71,14 @@ class Transaction(BaseModel):
                 if isinstance(v, StakeTransaction):
                     return v
                 return StakeTransaction(**v)
+            elif values['type'] == TransactionType.SMART_CONTRACT_DEPLOY:
+                if isinstance(v, SmartContractDeploymentTransaction):
+                    return v
+                return SmartContractDeploymentTransaction(**v)
+            elif values['type'] == TransactionType.SMART_CONTRACT_EXECUTION:
+                if isinstance(v, SmartContractTransaction):
+                    return v
+                return SmartContractTransaction(**v)
             # Add new transaction types here
         raise ValueError("Invalid content for transaction type")
 

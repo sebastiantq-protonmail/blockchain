@@ -1,5 +1,7 @@
 from .stake import Stake
 
+from .vm import VM
+
 from .transactions import TransactionType, Transaction, TransactionWithAdditionalData, \
                           StakeTransaction
 from .blocks import Block, BlockWithAdditionalData

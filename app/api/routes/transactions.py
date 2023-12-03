@@ -16,7 +16,7 @@ from app.api.methods.methods import handle_error
 
 # Blockchain project import
 from blockchain_project import Transaction, TransactionType, TransactionWithAdditionalData
-from app.api.config.blockchain import blockchain
+from app.api.config.blockchain import get_blockchain
 
 router = APIRouter()
 
@@ -51,6 +51,7 @@ async def add_new_transaction(transaction: Transaction, request: Request):
     - str: Response message after adding the transaction.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Adding a new transaction.")
         logger.debug(f"Transaction data: {transaction.dict()}") # Using debug level for transaction details
         
@@ -99,9 +100,10 @@ async def receive_transaction(transaction: TransactionWithAdditionalData, reques
     - str: Response message after adding the transaction.
     """
     try:
+        blockchain = get_blockchain()
         logger.info("Adding a new transaction.")
         logger.debug(f"Transaction data: {transaction.dict()}") # Using debug level for transaction details
-        print(transaction.dict())
+        
         # Verify the transaction data (signature, ...)
         logger.info("Verifying the transaction.")
         if not blockchain.is_valid_transaction(transaction):

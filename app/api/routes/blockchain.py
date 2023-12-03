@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Depends, status
 from slowapi.errors import RateLimitExceeded
 from bson import ObjectId
-from typing import List
+from typing import Any, Dict, List
 import pymongo.errors
 import logging
 
@@ -14,8 +14,9 @@ from app.api.models.models import ResponseError
 from app.api.methods.methods import handle_error
 
 # Blockchain project import
-from blockchain_project import Transaction
 from app.api.config.blockchain import get_blockchain
+
+from blockchain_project import Blockchain
 
 router = APIRouter()
 
@@ -30,43 +31,27 @@ logging.basicConfig(level=logging.INFO,
 
 logger = logging.getLogger(__name__)
 
-@router.post('/mine/', 
-            response_model=str, 
+@router.get('/blockchain/', 
+            response_model=Blockchain,
             status_code=status.HTTP_200_OK, 
-            tags=["MINER"],
+            tags=["BLOCKCHAIN"],
             responses={
-                400: {"model": ResponseError, "description": "Invalid transaction data."},
                 500: {"model": ResponseError, "description": "Internal server error."},
-                429: {"model": ResponseError, "description": "Too many requests."}
+                429: {"model": ResponseError, "description": "Too many requests."},
+                400: {"model": ResponseError, "description": "Invalid data."},
             })
-@limiter.limit("500/minute")
-async def mine(request: Request):
-    """Add a new transaction to the blockchain.
-    
-    Args:
-    - transaction (Transaction): Transaction data to be added.
-    
+@limiter.limit("5/minute")
+def get_complete_blockchain(request: Request):
+    """
+    Get the blockchain.
+
     Returns:
-    - str: Response message after adding the transaction.
+    - Blockchain: The blockchain data.
     """
     try:
         blockchain = get_blockchain()
-        logger.info("Mining new block...")
-        result = blockchain.mine()
-
-        if not result:
-            raise HTTPException(status_code=400, detail="No transactions to mine.")
-        
-        logger.info("Consensus...")
-        await blockchain.consensus()
-        logger.info("Consensus done.")
-        
-        logger.info("Announcing new block...")
-        await blockchain.announce_new_block(blockchain.last_block)
-        logger.info("Announcement done.")
-        
-        logger.info("Block successfully mined.")
-        return "Block #{} is mined.".format(result)
+        logger.info("Getting blockchain...")
+        return blockchain
     except RateLimitExceeded:
         raise HTTPException(status_code=429, detail="Too many requests.")
     except HTTPException:

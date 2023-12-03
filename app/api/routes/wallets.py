@@ -17,7 +17,7 @@ from app.api.routes.transactions import add_new_transaction
 from blockchain_project import Wallet, \
                                TransactionType, Transaction, TransactionWithAdditionalData
 from blockchain_project import save_wallet_to_file
-from app.api.config.blockchain import blockchain
+from app.api.config.blockchain import get_blockchain
 
 router = APIRouter()
 
@@ -89,6 +89,7 @@ def get_wallet_balance(public_key: str, request: Request):
     - float: The balance of the wallet.
     """
     try:
+        blockchain = get_blockchain()
         logger.info(f"Fetching balance for wallet {public_key}.")
 
         balance = blockchain.get_balance(public_key)
@@ -123,6 +124,7 @@ def get_wallet_transactions(public_key: str, request: Request):
     - List[TransactionWithAdditionalData]: List of transactions associated with the wallet.
     """
     try:
+        blockchain = get_blockchain()
         logger.info(f"Fetching transactions for wallet {public_key}.")
 
         transactions = blockchain.get_transactions_for_wallet(public_key)
